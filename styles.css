@@ -467,6 +467,8 @@ main {
     border-radius: 12px;
     border-left: 4px solid var(--error-color);
     margin-top: 20px;
+    line-height: 1.6;
+    white-space: pre-line;
 }
 
 .no-results {
@@ -486,6 +488,28 @@ footer {
     text-align: center;
     color: var(--text-light);
     font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.developer-credit {
+    margin-top: 8px;
+    font-size: 13px;
+    opacity: 0.8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.developer-credit strong {
+    color: var(--primary-color);
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--primary-color) 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .hidden {

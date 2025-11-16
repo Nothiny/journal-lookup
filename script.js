@@ -1,5 +1,7 @@
 // API配置
 const SEMANTIC_SCHOLAR_API = 'https://api.semanticscholar.org/graph/v1/paper/search';
+const REQUEST_TIMEOUT = 15000; // 15秒超时
+const MAX_RETRIES = 2; // 最大重试次数
 
 // DOM元素
 const paperInput = document.getElementById('paperInput');
@@ -9,10 +11,45 @@ const resultsContainer = document.getElementById('resultsContainer');
 const resultsList = document.getElementById('resultsList');
 const errorMessage = document.getElementById('errorMessage');
 
-// 搜索功能
-async function searchPaper(query) {
+// 带超时的 fetch 请求
+async function fetchWithTimeout(url, options = {}, timeout = REQUEST_TIMEOUT) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        if (error.name === 'AbortError') {
+            throw new Error('请求超时，请检查网络连接或稍后重试');
+        }
+        throw error;
+    }
+}
+
+// 检查网络连接
+function checkNetworkConnection() {
+    if (!navigator.onLine) {
+        return false;
+    }
+    return true;
+}
+
+// 搜索功能（带重试机制）
+async function searchPaper(query, retryCount = 0) {
     if (!query || query.trim().length === 0) {
         showError('请输入论文标题');
+        return;
+    }
+
+    // 检查网络连接
+    if (!checkNetworkConnection()) {
+        showError('网络未连接，请检查您的网络设置');
         return;
     }
 
@@ -22,13 +59,22 @@ async function searchPaper(query) {
     hideError();
 
     try {
-        // 使用Semantic Scholar API搜索
-        const response = await fetch(
+        // 使用Semantic Scholar API搜索（带超时）
+        const response = await fetchWithTimeout(
             `${SEMANTIC_SCHOLAR_API}?query=${encodeURIComponent(query)}&limit=10&fields=title,authors,year,venue,publicationVenue,externalIds,citationCount,paperId,url`
         );
 
         if (!response.ok) {
-            throw new Error(`API请求失败: ${response.status}`);
+            // 处理不同的HTTP状态码
+            if (response.status === 429) {
+                throw new Error('RATE_LIMIT');
+            } else if (response.status === 503) {
+                throw new Error('SERVICE_UNAVAILABLE');
+            } else if (response.status >= 500) {
+                throw new Error('SERVER_ERROR');
+            } else {
+                throw new Error(`API请求失败: ${response.status}`);
+            }
         }
 
         const data = await response.json();
@@ -40,14 +86,39 @@ async function searchPaper(query) {
         }
     } catch (error) {
         console.error('搜索错误:', error);
-        let errorMsg = '搜索失败，请稍后重试。';
         
-        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-            errorMsg = '网络连接失败，请检查网络设置。';
-        } else if (error.message.includes('429')) {
-            errorMsg = '请求过于频繁，请稍后再试。';
-        } else if (error.message) {
-            errorMsg = `搜索失败: ${error.message}`;
+        let errorMsg = '';
+        let shouldRetry = false;
+        
+        // 根据错误类型提供不同的提示
+        if (error.message.includes('请求超时') || error.message.includes('AbortError')) {
+            errorMsg = '请求超时，可能是网络较慢或API响应延迟';
+            shouldRetry = retryCount < MAX_RETRIES;
+        } else if (error.message.includes('Failed to fetch') || 
+                   error.message.includes('NetworkError') ||
+                   error.message.includes('Network request failed')) {
+            errorMsg = '网络连接失败，可能的原因：\n• 网络连接不稳定\n• API服务暂时不可用\n• 浏览器安全策略限制\n\n请检查网络连接后重试';
+            shouldRetry = retryCount < MAX_RETRIES;
+        } else if (error.message === 'RATE_LIMIT') {
+            errorMsg = '请求过于频繁，API速率限制。请等待几秒后重试';
+        } else if (error.message === 'SERVICE_UNAVAILABLE') {
+            errorMsg = 'API服务暂时不可用，请稍后再试';
+            shouldRetry = retryCount < MAX_RETRIES;
+        } else if (error.message === 'SERVER_ERROR') {
+            errorMsg = '服务器错误，请稍后重试';
+            shouldRetry = retryCount < MAX_RETRIES;
+        } else if (error.message.includes('CORS')) {
+            errorMsg = '跨域请求被阻止，可能是浏览器安全设置或网络问题';
+        } else {
+            errorMsg = `搜索失败: ${error.message}\n\n可能的原因：\n• 网络连接问题\n• API服务暂时不可用\n• 请求超时\n\n请稍后重试`;
+            shouldRetry = retryCount < MAX_RETRIES;
+        }
+        
+        // 如果需要重试且未达到最大重试次数
+        if (shouldRetry) {
+            console.log(`重试搜索 (${retryCount + 1}/${MAX_RETRIES})...`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // 递增延迟
+            return searchPaper(query, retryCount + 1);
         }
         
         showError(errorMsg);
@@ -368,7 +439,8 @@ function hideResults() {
 }
 
 function showError(message) {
-    errorMessage.textContent = message;
+    // 支持多行文本显示
+    errorMessage.innerHTML = message.replace(/\n/g, '<br>');
     errorMessage.classList.remove('hidden');
 }
 
@@ -429,5 +501,16 @@ paperInput.addEventListener('input', (e) => {
             searchPaper(query);
         }
     }, 500);
+});
+
+// 监听网络状态变化
+window.addEventListener('online', () => {
+    console.log('网络连接已恢复');
+    // 可以在这里添加提示，但不要过于打扰用户
+});
+
+window.addEventListener('offline', () => {
+    console.log('网络连接已断开');
+    showError('网络连接已断开，请检查您的网络设置');
 });
 
