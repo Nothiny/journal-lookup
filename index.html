@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>论文期刊查询 - Paper Journal Finder</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📚 论文期刊查询</h1>
+            <p class="subtitle">查找论文发表的期刊或会议</p>
+        </header>
+
+        <main>
+            <div class="search-section">
+                <div class="search-box">
+                    <input 
+                        type="text" 
+                        id="paperInput" 
+                        placeholder="输入论文标题（支持模糊查询）..."
+                        autocomplete="off"
+                    >
+                    <button id="searchBtn" class="search-button">
+                        <span class="search-icon">🔍</span>
+                        <span class="search-text">搜索</span>
+                    </button>
+                </div>
+                <div class="search-hint">
+                    <p>💡 提示：输入论文标题的任意部分即可进行模糊搜索</p>
+                </div>
+            </div>
+
+            <div id="loadingIndicator" class="loading hidden">
+                <div class="spinner"></div>
+                <p>正在搜索...</p>
+            </div>
+
+            <div id="resultsContainer" class="results-container hidden">
+                <h2>搜索结果</h2>
+                <div id="resultsList"></div>
+            </div>
+
+            <div id="errorMessage" class="error-message hidden"></div>
+        </main>
+
+        <footer>
+            <p>使用 Semantic Scholar API 提供数据支持</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
